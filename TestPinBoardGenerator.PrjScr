@@ -90,7 +90,7 @@ DocumentUniqueId=RVHAYMOL
 23=line
 
 [Generic_ScriptingSystem]
-StartProcName=C:\Doc\AltiumLib\CreateTestjig.pas>CreateTestjig
+StartProcName=CreateTestjig.pas>CreateTestjig
 
 [OutputGroup1]
 Name=Netlist Outputs
