@@ -1,0 +1,22 @@
+# Git ignore file for Altium repositories
+
+# Ignore all generated outputs
+output/
+
+#  Ignore all subdirectories in src. Will be History, preview, logs etc.
+src/*/
+History/
+__Previews/
+.private/
+notes/
+
+# Delphi files to ignore
+*.map
+*.exe
+*.~*
+
+# Word files to ignore
+*.wbk
+~$*.*
+
+

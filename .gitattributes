@@ -1,0 +1,27 @@
+# These files are text and should be normalized (convert crlf to lf)
+*.c       text
+*.h       text
+*.gld     text
+*.bat     text
+*.txt     text
+*.pas     text
+*.prj     text
+*.md      text
+*.OutJob  text
+
+# Images should be treated as binary
+# (binary is a macro for -text -diff)
+*.png     binary
+*.jpg     binary
+*.gif     binary
+*.sht     binary
+*.doc     binary
+*.docx    binary
+*.xlsx    binary
+*.xlsm    binary
+*.xls     -text diff=excel
+*.SchDoc  binary
+*.PcbDoc  binary
+*.SchLib  binary
+*.PcbLib  binary
+*.SchDot  binary
