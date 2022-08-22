@@ -1,5 +1,5 @@
 //----------------------------------------------------------
-// Import Elrpint testjig pcb from gerber or mtt files
+// Import Elrpint testjig pcb from gerber files
 // (c)Jan Kåre Vatne 2022, jkvatne@online.no
 // MIT Licence, free to use and modify.
 //----------------------------------------------------------
@@ -20,9 +20,9 @@ const
     // To avoid entering the file name, set DefaultFileName til the path/name of your gerber file.
     DefaultFileName = '';
     // The pcb hole for the needle holders. Typicaly they have 1mm dia round pins for all needle sizes.
-    HoleDiameter = 1.2;
-    // For pins with 2mm spacing, and 1.2mm holes we vsf 0.2mm cledarance aifh 0.3mm anular ring.
-    AnularRing   = 0.3;
+    HoleDiameter = 1.1;
+    // For pins with 2mm spacing, and 1.1mm holes we use 0.25mm anular giving giving 0.4mm clearance.
+    AnularRing   = 0.2;
     // Library component names
     ConnectorName = 'M2x32';
     TestPinName = 'TP-1MM';
@@ -140,7 +140,7 @@ Begin
     Comp.Name.Size      := MmsToCoord(1.0);
     Comp.Name.Rotation  := rotation;
     Comp.Name.XLocation := MmsToCoord(x - 0.4);
-    Comp.Name.YLocation := MmsToCoord(y - dia);
+    Comp.Name.YLocation := MmsToCoord(y - HoleDiameter-AnularRing);
 
     // Make the comment text NOT visible;
     Comp.CommentOn         := False;
@@ -234,31 +234,45 @@ begin
 
 end;
 
+var pad13:integer;
+var pad15:integer;
+var diameters: array [100..115] of double;
+var aperture:integer;
+
 // Parse the gerber file and create pcb outline and testpoints. Also adds 64 pin connector.
 procedure CreateTestjigPcb(InputFile: TextFile);
 var i,j,k: integer; cmd, name, line: string;
     NewTrack : IPCB_Track;  Arc: IPCB_Arc;
-    ival,jval,dx,dy,xpos,ypos,dia,width: double;
+    ival,jval,dx,dy,xpos,ypos,width: double;
     LastX, Lasty: double; ok:boolean;
 begin
-    dia:=1.3;
+    aperture := 0;
     width:=0.254;
     name:='-';
     Reset(InputFile);
     while not EOF(InputFile) do begin
         Readln(InputFile, line);
-        if copy(line,1,6)='%TO.N,' then begin
+        if copy(line,1,4)='%ADD' then begin
+            // Check for pin pads. Assume they are 1.3 or 1.5mm
+            j:=pos('*',line);
+            aperture:=strtoint(copy(line,5,3));
+            diameters[aperture]:=strtofloat(copy(line,10,j-10));
+        end else if copy(line,1,6)='%TO.N,' then begin
             // Save name
             i := pos('*',line);
             name := copy(line, 7, i-7);
-        end else if (copy(line,1,1)='X') and (name<>'-') then begin
+        end else if line[1]='D' then begin
+            aperture:=strtoint(copy(line,2,3));
+        end else if (line[1}='X') and (name<>'-') and (diameters[aperture]>0.4) and (diameters[aperture]<2.6) then begin
+            // Pin pad with hole given by diameters[aperture]
             i := pos('Y',line);
             xpos:=strtoint(copy(line,2,i-2))/1e6+OffsetX;
             j := pos('D', line);
             ypos:=strtoint(copy(line, i+1, j-i-1))/1e6+OffsetY;
-            PlaceTestPin(xpos, ypos, name, dia, 270.0);
+            PlaceTestPin(xpos, ypos, name, diameters[aperture], 270.0);
             name:='';
-        end else if (copy(line,1,1)='X') then begin
+        end else if (aperture=100) and (copy(line,1,1)='X') then begin
+            // Outline drawing
             // This should be a D02 (move) or D01 (draw) command
             i := pos('Y',line);
             xpos:=strtoint(copy(line,2,i-2))/1e6+OffsetX;
@@ -410,7 +424,7 @@ end;
 
 // Create a schematic with all test pins, with correct net names.
 procedure CreateTestjigSch(InputFile: TextFile);
-var name, line: string; xpos, ypos: double; i:integer; tpno:integer;
+var name, line: string; xpos, ypos: double; i, j:integer; tpno:integer;
 begin
     tpno:=1;
     // Initialize the robots in Schematic editor.
@@ -425,7 +439,14 @@ begin
             // Save name
             i := pos('*',line);
             name := copy(line, 7, i-7);
-        end else if (copy(line,1,1)='X') and (name<>'-') then begin
+        end else if copy(line,1,4)='%ADD' then begin
+            // Check for pin pads. Assume they are 1.3 or 1.5mm
+            j:=pos('*',line);
+            aperture:=strtoint(copy(line,5,3));
+            diameters[aperture]:=strtofloat(copy(line,10,j-10));
+        end else if line[1]='D' then begin
+            aperture:=strtoint(copy(line,2,3));
+        end else if (line[1}='X') and (name<>'-') and (diameters[aperture]>0.4) and (diameters[aperture]<2.6) then begin
             PlaceSchTestPin(name, 1.0, xpos, ypos, tpno);
             ypos:=ypos+300;
             if ypos>10000 then begin
