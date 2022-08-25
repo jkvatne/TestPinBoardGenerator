@@ -18,14 +18,14 @@ const
     // Library path must be set to the library containing
     LibraryFile = 'C:\doc\altiumlib\Mechanical.SchLib';
     // To avoid entering the file name, set DefaultFileName til the path/name of your gerber file.
-    DefaultFileName = '';
+    DefaultFileName = 'C:\doc\RollsRoyce\RRLC2-testjig\input\RRLC2TJ-v6.mtt';
     // The pcb hole for the needle holders. Typicaly they have 1mm dia round pins for all needle sizes.
     HoleDiameter = 1.1;
     // For pins with 2mm spacing, and 1.1mm holes we use 0.25mm anular giving giving 0.4mm clearance.
     AnularRing   = 0.2;
     // Library component names
     ConnectorName = 'M2x32';
-    TestPinName = 'TP-1MM';
+    TestPinName = 'TP-SCT';
 
 // Global variables
 var
@@ -77,7 +77,7 @@ End;
 
 
 // Place a track on the pcb. All dimensions in millimeters.
-Function PlaceAPCBTrack(x1, y1, x2, y2 : double; width : double; ALayer : TLayer) : IPCB_Track;
+Function NewTrack(x1, y1, x2, y2 : double; width : double; ALayer : TLayer) : IPCB_Track;
 Var
    T : IPCB_Track;
 Begin
@@ -94,7 +94,7 @@ End;
 
 
 // Place a test pin on pcb. All dimensions im millimeters.
-Procedure PlaceTestPin(x,y : double; name:string, dia: double, rotation: double);
+Procedure PlaceTestPin(x,y : double; NetName:string, HoleDia: double);
 Var
     Comp : IPCB_Component;
     NewPad : IPCB_Pad;
@@ -107,24 +107,24 @@ Begin
     // Create a pad
     NewPad := PlaceAPCBPad(0,0, HoleDiameter+2*AnularRing, HoleDiameter, eMultiLayer, '1', true);
     Comp.AddPCBObject(NewPad);
-    PCBServer.SendMessageToRobots(Comp.I_ObjectAddress,c_Broadcast,PCBM_BoardRegisteration, NewPad.I_ObjectAddress);
+    //PCBServer.SendMessageToRobots(Comp.I_ObjectAddress,c_Broadcast,PCBM_BoardRegisteration, NewPad.I_ObjectAddress);
 
-    if name<>'' then begin
+    if NetName<>'' then begin
         Iterator := Board.BoardIterator_Create;
         Iterator.AddFilter_ObjectSet(MkSet(eNetObject));
         NewNet := Iterator.FirstPCBObject;
         while Newnet<>nil do begin
-           if NewNet.Name=name then begin
+           if NewNet.Name=NetName then begin
                break;
            end;
            NewNet := Iterator.NextPCBObject;
         end;
         if NewNet=nil then begin
             NewNet := PCBServer.PCBObjectFactory(eNetObject, eNoDimension, eCreate_Default);
-            NewNet.Name :=name;
+            NewNet.Name :=NetName;
         end;
         Board.AddPCBObject(NewNet);
-        PCBServer.SendMessageToRobots(Board.I_ObjectAddress,c_Broadcast,PCBM_BoardRegisteration,NewNet.I_ObjectAddress);
+        //PCBServer.SendMessageToRobots(Board.I_ObjectAddress,c_Broadcast,PCBM_BoardRegisteration,NewNet.I_ObjectAddress);
     end;
 
     NewPad.net:=NewNet;
@@ -136,9 +136,9 @@ Begin
 
     // Make the designator text visible;
     Comp.NameOn         := True;
-    Comp.Name.Text      := name;
+    Comp.Name.Text      := NetName;
     Comp.Name.Size      := MmsToCoord(1.0);
-    Comp.Name.Rotation  := rotation;
+    Comp.Name.Rotation  := 270;
     Comp.Name.XLocation := MmsToCoord(x - 0.4);
     Comp.Name.YLocation := MmsToCoord(y - HoleDiameter-AnularRing);
 
@@ -149,7 +149,7 @@ Begin
     Comp.Comment.YLocation := MmsToCoord(y+2);
 
     Board.AddPCBObject(Comp);
-    PCBServer.SendMessageToRobots(Board.I_ObjectAddress,c_Broadcast,PCBM_BoardRegisteration,Comp.I_ObjectAddress);
+    //PCBServer.SendMessageToRobots(Board.I_ObjectAddress,c_Broadcast,PCBM_BoardRegisteration,Comp.I_ObjectAddress);
 End;
 
 
@@ -230,7 +230,7 @@ begin
     Comp.Comment.YLocation := MmsToCoord(y-2.2);
 
     Board.AddPCBObject(Comp);
-    PCBServer.SendMessageToRobots(Board.I_ObjectAddress,c_Broadcast,PCBM_BoardRegisteration,Comp.I_ObjectAddress);
+    //PCBServer.SendMessageToRobots(Board.I_ObjectAddress,c_Broadcast,PCBM_BoardRegisteration,Comp.I_ObjectAddress);
 
 end;
 
@@ -242,7 +242,7 @@ var aperture:integer;
 // Parse the gerber file and create pcb outline and testpoints. Also adds 64 pin connector.
 procedure CreateTestjigPcb(InputFile: TextFile);
 var i,j,k: integer; cmd, name, line: string;
-    NewTrack : IPCB_Track;  Arc: IPCB_Arc;
+    Track : IPCB_Track;  Arc: IPCB_Arc;
     ival,jval,dx,dy,xpos,ypos,width: double;
     LastX, Lasty: double; ok:boolean;
 begin
@@ -269,7 +269,7 @@ begin
             xpos:=strtoint(copy(line,2,i-2))/1e6+OffsetX;
             j := pos('D', line);
             ypos:=strtoint(copy(line, i+1, j-i-1))/1e6+OffsetY;
-            PlaceTestPin(xpos, ypos, name, diameters[aperture], 270.0);
+            PlaceTestPin(xpos, ypos, name, diameters[aperture]);
             name:='';
         end else if (aperture=100) and (copy(line,1,1)='X') then begin
             // Outline drawing
@@ -283,10 +283,10 @@ begin
             ypos:=strtoint(copy(line, i+1, j-i-1))/1e6+OffsetY;
             cmd:=copy(line,length(line)-3,4);
             if (cmd='D01*') and (pos('I',line)=0) then begin
-               NewTrack := PlaceAPCBTrack(xpos, ypos, lastx, lasty, width, eMechanical1);
-               Board.AddPCBObject(NewTrack);
-               NewTrack.Selected:=true;
-               PCBServer.SendMessageToRobots(NewTrack.I_ObjectAddress,c_Broadcast,PCBM_BoardRegisteration,NewTrack.I_ObjectAddress);
+               Track := NewTrack(xpos, ypos, lastx, lasty, width, eMechanical1);
+               Board.AddPCBObject(Track);
+               Track.Selected:=true;
+               //PCBServer.SendMessageToRobots(NewTrack.I_ObjectAddress,c_Broadcast,PCBM_BoardRegisteration,NewTrack.I_ObjectAddress);
             end else if (cmd='D01*') and (pos('I',line)<>0) then begin
                i:=pos('I',line);
                j:=pos('J',line);
@@ -342,7 +342,6 @@ begin
            LastY := ypos;
         end;
     end;
-    PCBServer.PostProcess;
 
     // Create outline from selected tracks
     ResetParameters;
@@ -358,7 +357,98 @@ begin
     CreateConnector(MaxX/2-15.5*2.54, MaxY-5.3-2.54, 32, 2, 2.54, 2.54, 'X1', 'Test interface');
 
     // Refresh PCB screen
-    PCBServer.PostProcess;
+    Client.CommandLauncher.LaunchCommand('PCB:Zoom', 'Action=Redraw' , 255, Client.CurrentView);
+end;
+
+function NewArc(x,y:double; radius:double; width:double; startangle, endangle: double): IPCB_Arc;
+begin
+    result := PCBServer.PCBObjectFactory(eArcObject, eNoDimension, eCreate_Default);
+    result.XCenter    := MMsToCoord(x);
+    result.YCenter    := MMsToCoord(y);
+    result.Layer      := eMechanical1;
+    result.LineWidth  := MMsToCoord(width);
+    result.Radius     := MMsToCoord(radius);
+    result.StartAngle := startangle;
+    result.EndAngle   := endangle;
+end;
+
+procedure GenerateOutline(width, height: double);
+var Track : IPCB_Track;  Arc: IPCB_Arc; ok:boolean;
+begin
+    // Bottom line
+    Track := NewTrack(2.0, 0.0, width-2.0, 0.0, 0.15, eMechanical1);
+    Board.AddPCBObject(Track);
+    Track.selected := true;
+    // Left edge
+    Track := NewTrack(0.0, 2.0, 0.0, height-27.0, 0.15, eMechanical1);
+    Board.AddPCBObject(Track);
+    Track.selected := true;
+    // Right edge
+    Track := NewTrack(width, 2.0, width, height-27.0, 0.15, eMechanical1);
+    Board.AddPCBObject(Track);
+    Track.selected := true;
+    // Left top vertical
+    Track := NewTrack(35.0, height-23.0, 35.0, height-2.0, 0.15, eMechanical1);
+    Board.AddPCBObject(Track);
+    Track.selected := true;
+    // Right top vertical
+    Track := NewTrack(width-35.0, height-2.0, width-35.0, height-23.0, 0.15, eMechanical1);
+    Board.AddPCBObject(Track);
+    Track.selected := true;
+    // Top center horizontal
+    Track := NewTrack(37.0, height, width-37.0, height, 0.15, eMechanical1);
+    Board.AddPCBObject(Track);
+    Track.selected := true;
+    // Left top horizontal
+    Track := NewTrack(2.0, height-25.0, 33.0, height-25.0, 0.15, eMechanical1);
+    Board.AddPCBObject(Track);
+    Track.selected := true;
+    // Right top horizontal
+    Track := NewTrack(width-33.0, height-25.0, width-2.0, height-25.0, 0.15, eMechanical1);
+    Board.AddPCBObject(Track);
+    Track.selected := true;
+    // Bottom arcs
+    Arc := NewArc(2.0,       2.0, 2.0, 0.15, 180, 270);
+    Board.AddPCBObject(Arc);
+    Arc.selected := true;
+    Arc := NewArc(width-2.0, 2.0, 2.0, 0.15, 270, 360);
+    Board.AddPCBObject(Arc);
+    Arc.selected := true;
+    // Top arcs
+    Arc := NewArc(2.0,       height-27.0, 2.0, 0.15,  90, 180);
+    Board.AddPCBObject(Arc);
+    Arc.selected := true;
+    Arc := NewArc(width-2.0, height-27.0, 2.0, 0.15,   0,  90);
+    Board.AddPCBObject(Arc);
+    Arc.selected := true;
+    Arc := NewArc(37.0,       height-2.0,  2.0, 0.15,  90, 180);
+    Board.AddPCBObject(Arc);
+    Arc.selected := true;
+    Arc := NewArc(width-37.0, height-2.0,  2.0, 0.15,   0,  90);
+    Board.AddPCBObject(Arc);
+    Arc.selected := true;
+    // Top inner corners
+    Arc := NewArc(33.0,       height-23.0, 2.0, 0.15, 270, 360);
+    Board.AddPCBObject(Arc);
+    Arc.selected := true;
+    Arc := NewArc(width-33.0, height-23.0, 2.0, 0.15, 180, 270);
+    Board.AddPCBObject(Arc);
+    Arc.selected := true;
+
+    // Create outline from selected tracks
+    ResetParameters;
+    AddStringParameter('Mode', 'BOARDOUTLINE_FROM_SEL_PRIMS');
+    ok :=RunProcess('PCB:PlaceBoardOutline');
+
+    // Deselect border
+    ResetParameters;
+    AddStringParameter('Scope', 'All');
+    RunProcess('PCB:DeSelect');
+
+    // Add connector
+    CreateConnector(width/2-15.5*2.54, height-5.3-2.54, 32, 2, 2.54, 2.54, 'X1', 'Test interface');
+
+    // Refresh PCB screen
     Client.CommandLauncher.LaunchCommand('PCB:Zoom', 'Action=Redraw' , 255, Client.CurrentView);
 end;
 
@@ -380,12 +470,11 @@ begin
     Schema.RegisterSchObjectInContainer(SchNetlabel);
 end;
 
-procedure PlaceSchTestPin(name: string; dia: double; xpos, ypos: double; var tpno:integer);
+procedure PlaceSchTestPin(PinName, NetName: string; dia: double; xpos, ypos: double; var tpno:integer);
 var SchNetlabel : ISch_Netlabel;  ok : boolen; s:string;  SchWire:ISch_Wire;
 begin
     s:= 'Orientation=0|Location.X='+IntToStr(MilsToCoord(xpos))+'|Location.Y='
-        +IntToStr(MilsToCoord(ypos));
-    s:=s+'|designator=TP'+inttostr(tpno);
+        +IntToStr(MilsToCoord(ypos))+'|designator='+PinName;
     tpno:=tpno+1;
     ok := IntegratedLibraryManager.PlaceLibraryComponent(
         TestPinName,
@@ -396,7 +485,7 @@ begin
     If SchNetlabel = Nil Then Exit;
     SchNetlabel.Location    := Point(MilsToCoord(xpos+300), MilsToCoord(ypos));
     SchNetlabel.Orientation := eRotate0;
-    SchNetlabel.Text        := name;
+    SchNetlabel.Text        := NetName;
     Schema.RegisterSchObjectInContainer(SchNetlabel);
 
     SchWire := SchServer.SchObjectFactory(eWire,eCreate_GlobalCopy);
@@ -424,11 +513,11 @@ end;
 
 // Create a schematic with all test pins, with correct net names.
 procedure CreateTestjigSch(InputFile: TextFile);
-var name, line: string; xpos, ypos: double; i, j:integer; tpno:integer;
+var NetName, PinName, line: string; xpos, ypos: double; i, j:integer; tpno:integer;
 begin
     tpno:=1;
     // Initialize the robots in Schematic editor.
-    SchServer.ProcessControl.PreProcess(Schema, '');
+    //SchServer.ProcessControl.PreProcess(Schema, '');
     PlaceConnector(13000, 10000);
     xpos:=800; ypos:=800;
     name:='-';
@@ -436,9 +525,13 @@ begin
     while not EOF(InputFile) do begin
         Readln(InputFile, line);
         if copy(line,1,6)='%TO.N,' then begin
-            // Save name
+            // Save net name
             i := pos('*',line);
-            name := copy(line, 7, i-7);
+            NetName := copy(line, 7, i-7);
+        end else if copy(line,1,6)='%TO.C,' then begin
+            // Save component name (f.ex. TP12)
+            i := pos('*',line);
+            NetName := copy(line, 7, i-7);
         end else if copy(line,1,4)='%ADD' then begin
             // Check for pin pads. Assume they are 1.3 or 1.5mm
             j:=pos('*',line);
@@ -447,7 +540,7 @@ begin
         end else if line[1]='D' then begin
             aperture:=strtoint(copy(line,2,3));
         end else if (line[1}='X') and (name<>'-') and (diameters[aperture]>0.4) and (diameters[aperture]<2.6) then begin
-            PlaceSchTestPin(name, 1.0, xpos, ypos, tpno);
+            PlaceSchTestPin(PinName, NetName, 1.0, xpos, ypos, tpno);
             ypos:=ypos+300;
             if ypos>10000 then begin
                 xpos:=xpos+1200;
@@ -461,10 +554,57 @@ begin
 end;
 
 
+Procedure ParseMttFile(InputFile: TextFile);
+var
+    sizex, sizey: doble; i,j, n:  Integer; NetName, Designator, line, xpos, ypos, HoleDia, PinType : string; Dialog: TOpenDialog;
+begin
+    n:=0;
+    Reset(InputFile);
+    while not EOF(InputFile) do begin
+        Readln(InputFile, line);
+        if copy(line,1,5)='SizeX' then begin
+            SizeX := trunc(strtofloat(copy(line,7,999)));
+        end else if copy(line,1,5)='SizeY' then begin
+            SizeY := trunc(strtofloat(copy(line,7,999)));
+        end else if copy(line,1,6)='PinItm' then begin
+            i := pos('=',line);
+            line := copy(line, i+1, 9999);
+            i := pos('|',line);
+            NetName := copy(line, 1, i-1);
+            line := copy(line, i+1, 9999);
+            i := pos('|',line);
+            // Unused field, allways N
+            line := copy(line, i+1, 9999);
+            i := pos('|',line);
+            xpos := copy(line, 1, i-1);
+            line := copy(line, i+1, 9999);
+            i := pos('|',line);
+            ypos := copy(line, 1, i-1);
+            line := copy(line, i+1, 9999);
+            i := pos('|',line);
+            HoleDia := copy(line, 1, i-1);
+            line := copy(line, i+1, 9999);
+            i := pos('|',line);
+            // Connector pin number - not used now
+            line := copy(line, i+1, 9999);
+            i := pos('|',line);
+            // Pin type (Q,B etc.)
+            PinType := copy(line, 1, i-1);
+            line := copy(line, i+1, 9999);
+
+            i := pos('|',line);
+            PlaceTestPin(strtoint(xpos)/1e6+SizeX/2, strtoint(ypos)/1e6+SizeY/2, NetName, strtoint(HoleDia)/1e6);
+            n:=n+1;
+        end;
+    end;
+    GenerateOutline(SizeX, SizeY);
+end;
+
 // Main procedure to run.
 procedure Run;
-var Dialog: TOpenDialog; InputFile: TextFile;
+var Dialog: TOpenDialog; InputFile: TextFile;  s:string;
 begin
+    s:='OK';
     Dialog:=TOpenDialog.Create(nil);
     Dialog.Filename:=DefaultFileName;
     if (DefaultFileName<>'') or Dialog.Execute then begin
@@ -481,23 +621,27 @@ begin
         If PCBServer = Nil Then Exit;
         Board := PCBServer.GetCurrentPCBBoard;
         If Board = Nil then exit;
-        PCBServer.PreProcess;
+        //PCBServer.PreProcess;
 
         AssignFile(InputFile, Dialog.Filename);
-        CalculateOffset(InputFile);
-        CreateTestjigPcb(InputFile);
+        if AnsiRightStr(Dialog.Filename,3)='gbr' then begin
+            CalculateOffset(InputFile);
+            CreateTestjigPcb(InputFile);
+        end;
 
-        Client.StartServer('SCH');
+        {Client.StartServer('SCH');
         If SchServer = Nil Then Exit;
         if CreateNewSch then begin
            CreateNewDocumentFromDocumentKind('SCH');
         end;
         Schema := SchServer.GetCurrentSchDocument;
-        SchServer.ProcessControl.PreProcess(Schema, '');
-
-        CreateTestjigSch(InputFile);
+        //SchServer.ProcessControl.PreProcess(Schema, '');
+        }
+        if AnsiRightStr(Dialog.Filename,3)='gbr' then begin
+            CreateTestjigSch(InputFile);
+        end else if AnsiRightStr(Dialog.Filename,3)='mtt' then begin
+            ParseMttFile(InputFile);
+        end;
     end;
 end;
-
-
 
