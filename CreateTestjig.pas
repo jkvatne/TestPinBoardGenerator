@@ -37,30 +37,30 @@ var
     MaxX, MaxY :  double;
 
 // Place a pad on the pcb. All dimensions in millimeters.
-Function PlaceAPCBPad(AX,AY : double; ATopSize, AHoleSize : double; ALayer : TLayer; AName : string; round: boolean) : IPCB_Pad;
+Function NewPad(AX,AY : double; ATopSize, AHoleSize : double; ALayer : TLayer; AName : string; round: boolean) : IPCB_Pad;
 Var
-    P        : IPCB_Pad;
+    Pad        : IPCB_Pad;
     PadCache : TPadCache;
 Begin
     Result := Nil;
-    P := PcbServer.PCBObjectFactory(ePadObject,eNoDimension,eCreate_Default);
-    If P = Nil Then Exit;
+    Pad := PcbServer.PCBObjectFactory(ePadObject,eNoDimension,eCreate_Default);
+    If Pad = Nil Then Exit;
 
-    P.X        := MMsToCoord(AX);
-    P.Y        := MMsToCoord(AY);
-    P.TopXSize := MMsToCoord(ATopSize);
-    P.TopYSize := MMsToCoord(ATopSize);
+    Pad.X        := MMsToCoord(AX);
+    Pad.Y        := MMsToCoord(AY);
+    Pad.TopXSize := MMsToCoord(ATopSize);
+    Pad.TopYSize := MMsToCoord(ATopSize);
     if round then begin
-        P.TopShape := eRounded;
+        Pad.TopShape := eRounded;
     end else begin
-        P.TopShape := eRectangular;
+        Pad.TopShape := eRectangular;
     end;
-    P.HoleSize := MMsToCoord(AHoleSize);
-    P.Layer    := ALayer;
-    P.Name     := AName;
+    Pad.HoleSize := MMsToCoord(AHoleSize);
+    Pad.Layer    := ALayer;
+    Pad.Name     := AName;
 
     // Setup a pad cache
-    Padcache := P.GetState_Cache;
+    Padcache := Pad.GetState_Cache;
     Padcache.ReliefAirGap              := MMsToCoord(ReliefWidth);
     Padcache.PowerPlaneReliefExpansion := MMsToCoord(ReliefWidth);
     Padcache.PowerPlaneClearance       := MMsToCoord(ReliefWidth);
@@ -71,8 +71,8 @@ Begin
     Padcache.PasteMaskExpansionValid   := eCacheManual;
 
     // Assign the new pad cache to the pad
-    P.SetState_Cache(Padcache);
-    Result := P;
+    Pad.SetState_Cache(Padcache);
+    Result := Pad;
 End;
 
 
@@ -92,42 +92,119 @@ Begin
     Result := T;
 End;
 
+procedure SetupPadCache(Pad: IPCB_Pad);
+begin
+    // Setup a pad cache
+    Padcache := P.GetState_Cache;
+    Padcache.ReliefAirGap := MilsToCoord(11);
+    Padcache.PowerPlaneReliefExpansion := MilsToCoord(10);
+    Padcache.PowerPlaneClearance       := MilsToCoord(10);
+    Padcache.ReliefConductorWidth      := MilsToCoord(10);
+    Padcache.SolderMaskExpansion       := MilsToCoord(10);
+    Padcache.SolderMaskExpansionValid  := eCacheManual;
+    Padcache.PasteMaskExpansion        := MilsToCoord(10);
+    Padcache.PasteMaskExpansionValid   := eCacheManual;
+    // Assign the new pad cache to the pad
+    Pad.SetState_Cache(Padcache);
+end;
+
+function NewNet(NetName:string): IPCB_Net;
+var NewNet : IPCB_Net;
+    Iterator : IPCB_BoardIterator;
+begin
+    Iterator := Board.BoardIterator_Create;
+    Iterator.AddFilter_ObjectSet(MkSet(eNetObject));
+    NewNet := Iterator.FirstPCBObject;
+    while Newnet<>nil do begin
+       if NewNet.Name=NetName then begin
+           break;
+       end;
+       NewNet := Iterator.NextPCBObject;
+    end;
+    // Create new net only if it does not exist
+    if NewNet=nil then begin
+        NewNet := PCBServer.PCBObjectFactory(eNetObject, eNoDimension, eCreate_Default);
+        NewNet.Name :=NetName;
+    end;
+    Board.AddPCBObject(NewNet);
+    result :=NewNet;
+end;
+
+Procedure PlaceTestPinComp(x,y : double; Designator, Comment, NetName:string, PinDia: double);
+Var
+    Comp : IPCB_Component;
+    Pad  : IPCB_Pad;
+Begin
+    Comp := PCBServer.PCBObjectFactory(eComponentObject, eNoDimension, eCreate_Default);
+    If Comp = Nil Then Exit;
+
+    if pinDia>=5.0 then begin
+        Pad:=NewPad(0,0, pinDia+0.5, pinDia, eMultiLayer, '0', true);
+    end else begin
+        Pad:=NewPad(0,0, HoleDiameter+2*AnularRing, HoleDiameter, eMultiLayer, '1', true);
+    end;
+    Pad.net:=NewNet(NetName);
+    Comp.AddPCBObject(Pad);
+
+    // Set the reference point of the Component
+    Comp.X         := MmsToCoord(x);
+    Comp.Y         := MmsToCoord(y);
+    Comp.Layer     := eTopLayer;
+
+    // Make the designator text visible;
+    Comp.NameOn         := pinDia<5.0;
+    Comp.Name.Text      := Designator;
+    Comp.Name.Size      := MmsToCoord(1.0);
+    Comp.Name.Rotation  := 270;
+    Comp.Name.XLocation := MmsToCoord(x - 0.4);
+    Comp.Name.YLocation := MmsToCoord(y - HoleDiameter-AnularRing);
+
+    // Make the comment text visible;
+    Comp.CommentOn         := pinDia<5.0;
+    Comp.Comment.Text      := Comment;
+    Comp.Comment.Rotation  := 90;
+    Comp.Comment.Size      := MmsToCoord(1.0);
+    Comp.Comment.XLocation := MmsToCoord(x + 0.4);
+    Comp.Comment.YLocation := MmsToCoord(y + HoleDiameter + AnularRing + 0.1);
+
+    Board.AddPCBObject(Comp);
+End;
 
 // Place a test pin on pcb. All dimensions im millimeters.
 Procedure PlaceTestPin(x,y : double; NetName:string, HoleDia: double);
 Var
     Comp : IPCB_Component;
-    NewPad : IPCB_Pad;
-    NewNet : IPCB_Net;
+    Pad : IPCB_Pad;
+    Net : IPCB_Net;
     Iterator : IPCB_BoardIterator;
 Begin
     Comp := PCBServer.PCBObjectFactory(eComponentObject, eNoDimension, eCreate_Default);
     If Comp = Nil Then Exit;
 
     // Create a pad
-    NewPad := PlaceAPCBPad(0,0, HoleDiameter+2*AnularRing, HoleDiameter, eMultiLayer, '1', true);
-    Comp.AddPCBObject(NewPad);
+    Pad := NewPad(0,0, HoleDiameter+2*AnularRing, HoleDiameter, eMultiLayer, '1', true);
+    Comp.AddPCBObject(Pad);
     //PCBServer.SendMessageToRobots(Comp.I_ObjectAddress,c_Broadcast,PCBM_BoardRegisteration, NewPad.I_ObjectAddress);
 
     if NetName<>'' then begin
         Iterator := Board.BoardIterator_Create;
         Iterator.AddFilter_ObjectSet(MkSet(eNetObject));
-        NewNet := Iterator.FirstPCBObject;
-        while Newnet<>nil do begin
-           if NewNet.Name=NetName then begin
+        Net := Iterator.FirstPCBObject;
+        while Net<>nil do begin
+           if Net.Name=NetName then begin
                break;
            end;
-           NewNet := Iterator.NextPCBObject;
+           Net := Iterator.NextPCBObject;
         end;
-        if NewNet=nil then begin
-            NewNet := PCBServer.PCBObjectFactory(eNetObject, eNoDimension, eCreate_Default);
-            NewNet.Name :=NetName;
+        if Net=nil then begin
+            Net := PCBServer.PCBObjectFactory(eNetObject, eNoDimension, eCreate_Default);
+            Net.Name :=NetName;
         end;
-        Board.AddPCBObject(NewNet);
+        Board.AddPCBObject(Net);
         //PCBServer.SendMessageToRobots(Board.I_ObjectAddress,c_Broadcast,PCBM_BoardRegisteration,NewNet.I_ObjectAddress);
     end;
 
-    NewPad.net:=NewNet;
+    Pad.net:=Net;
 
     // Set the reference point of the Component
     Comp.X         := MmsToCoord(x);
@@ -194,7 +271,7 @@ end;
 procedure CreateConnector(x,y: double; nx,ny:integer; dx,dy:double, designator, name: string);
 var
     Comp : IPCB_Component;
-    NewPad : IPCB_Pad;
+    Pad : IPCB_Pad;
     i,j:integer;
 begin
     Comp := PCBServer.PCBObjectFactory(eComponentObject, eNoDimension, eCreate_Default);
@@ -203,8 +280,8 @@ begin
     // Create a pad
     for j:=1 to ny do begin
         for i:=1 to nx do begin
-            NewPad := PlaceAPCBPad((i-1)*dx, (j-1)*2.54, 1.8, 1.0, eMultiLayer, inttostr((i-1)*ny +j), (i<>1) or (j<>1));
-            Comp.AddPCBObject(NewPad);
+            Pad := NewPad((i-1)*dx, (j-1)*2.54, 1.8, 1.0, eMultiLayer, inttostr((i-1)*ny +j), (i<>1) or (j<>1));
+            Comp.AddPCBObject(Pad);
         end;
     end;
 
@@ -557,6 +634,7 @@ end;
 Procedure ParseMttFile(InputFile: TextFile);
 var
     sizex, sizey: doble; i,j, n:  Integer; NetName, Designator, line, xpos, ypos, HoleDia, PinType : string; Dialog: TOpenDialog;
+    comment:string;
 begin
     n:=0;
     Reset(InputFile);
@@ -591,9 +669,19 @@ begin
             // Pin type (Q,B etc.)
             PinType := copy(line, 1, i-1);
             line := copy(line, i+1, 9999);
-
-            i := pos('|',line);
-            PlaceTestPin(strtoint(xpos)/1e6+SizeX/2, strtoint(ypos)/1e6+SizeY/2, NetName, strtoint(HoleDia)/1e6);
+            // Last item is designator (TPnn)
+            Designator:=line;
+            // If designator not given, make one
+            if Designator='' then begin
+                Designator:='TP'+inttostr(n);
+            end;
+            if HoleDia='1350000' then begin
+              PinType:='R75'+PinType;
+            end else if HoleDia='1700000' then begin
+              PinType:='R100'+PinType;
+            end;
+            PlaceTestPinComp(strtoint(xpos)/1e6+SizeX/2, strtoint(ypos)/1e6+SizeY/2,
+                Designator, PinType, NetName, strtoint(HoleDia)/1e6);
             n:=n+1;
         end;
     end;
