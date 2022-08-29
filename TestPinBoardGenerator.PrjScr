@@ -83,7 +83,7 @@ GenerateClassCluster=0
 DocumentUniqueId=
 
 [Document3]
-DocumentPath=..\..\RollsRoyce\RRLC2-testjig\src\RRLC2TJA.PcbDoc
+DocumentPath=CreateTestjigSchema.pas
 AnnotationEnabled=1
 AnnotateStartValue=1
 AnnotationIndexControlEnabled=0
@@ -97,44 +97,16 @@ ClassGenCCAutoRoomEnabled=1
 ClassGenNCAutoScope=None
 DItemRevisionGUID=
 GenerateClassCluster=0
-DocumentUniqueId=DVWLCNLK
-
-[Document4]
-DocumentPath=..\..\RollsRoyce\RRLC2-testjig\src\RRLC2-Nails.SchDoc
-AnnotationEnabled=1
-AnnotateStartValue=1
-AnnotationIndexControlEnabled=0
-AnnotateSuffix=
-AnnotateScope=All
-AnnotateOrder=-1
-DoLibraryUpdate=1
-DoDatabaseUpdate=1
-ClassGenCCAutoEnabled=1
-ClassGenCCAutoRoomEnabled=1
-ClassGenNCAutoScope=None
-DItemRevisionGUID=
-GenerateClassCluster=0
-DocumentUniqueId=SSRRDHWD
-
-[Document5]
-DocumentPath=Example.PcbDoc
-AnnotationEnabled=1
-AnnotateStartValue=1
-AnnotationIndexControlEnabled=0
-AnnotateSuffix=
-AnnotateScope=All
-AnnotateOrder=-1
-DoLibraryUpdate=1
-DoDatabaseUpdate=1
-ClassGenCCAutoEnabled=1
-ClassGenCCAutoRoomEnabled=1
-ClassGenNCAutoScope=None
-DItemRevisionGUID=
-GenerateClassCluster=0
-DocumentUniqueId=FWSBGMCE
+DocumentUniqueId=
 
 [Generic_ScriptingSystem]
-StartProcName=CreateTestjig.pas>Run
+StartProcName=CreateTestjigSchema.pas>Run
+
+[Generic_ScriptingSystemBreakpoints]
+ModuleName1=C:\Doc\TestJig\TestPinBoardGenerator\CreateTestjigSchema.pas
+Line1=156
+Condition1=
+Enabled1=True
 
 [OutputGroup1]
 Name=Netlist Outputs
@@ -687,6 +659,11 @@ OutputName11=Specctra Design PCB
 OutputDocumentPath11=
 OutputVariantName11=
 OutputDefault11=0
+OutputType12=Web ReviewOutputName
+OutputName12=Web Review Data
+OutputDocumentPath12=
+OutputVariantName12=
+OutputDefault12=0
 
 [OutputGroup10]
 Name=PostProcess Outputs
