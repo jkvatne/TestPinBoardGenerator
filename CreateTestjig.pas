@@ -17,6 +17,7 @@ const
     SolderMaskExpansion = 0.01;
     // Library path must be set to the library containing
     LibraryFile = 'C:\doc\altiumlib\Mechanical.SchLib';
+    PcbLibraryFile ='C:\Doc\AltiumLib\pcb.PCBLIB';
     // To avoid entering the file name, set DefaultFileName til the path/name of your gerber file.
     DefaultFileName = 'C:\doc\RollsRoyce\RRLC2-testjig\input\RRLC2TJ-v6.mtt';
     // The pcb hole for the needle holders. Typicaly they have 1mm dia round pins for all needle sizes.
@@ -35,6 +36,8 @@ var
     // Size and offset of board. Must be global.
     OffsetX, OffsetY : double;
     MaxX, MaxY :  double;
+    R100 : IPCB_LibCOmponent;
+    R75 : IPCB_LibCOmponent;
 
 // Place a pad on the pcb. All dimensions in millimeters.
 Function NewPad(AX,AY : double; ATopSize, AHoleSize : double; ALayer : TLayer; AName : string; round: boolean) : IPCB_Pad;
@@ -134,30 +137,47 @@ Procedure PlaceTestPinComp(x,y : double; Designator, Comment, NetName:string, Pi
 Var
     Comp : IPCB_Component;
     Pad  : IPCB_Pad;
+    s:string;      ok:boolean;
 Begin
     Comp := PCBServer.PCBObjectFactory(eComponentObject, eNoDimension, eCreate_Default);
     If Comp = Nil Then Exit;
 
+    Comp := PCBServer.PCBObjectFactory(eComponentObject, eNoDimension, eCreate_Default);
     if pinDia>=5.0 then begin
-        Pad:=NewPad(0,0, pinDia+0.5, pinDia, eMultiLayer, '0', true);
+        //Pad:=NewPad(0,0, pinDia+0.5, pinDia, eMultiLayer, '0', true);
+        Comp.SourceLibReference := 'R100';
     end else begin
-        Pad:=NewPad(0,0, HoleDiameter+2*AnularRing, HoleDiameter, eMultiLayer, '1', true);
+        Comp.SourceLibReference := 'R75';
+        //Pad:=NewPad(0,0, HoleDiameter+2*AnularRing, HoleDiameter, eMultiLayer, '1', true);
     end;
-    Pad.net:=NewNet(NetName);
-    Comp.AddPCBObject(Pad);
+    Comp.SourceComponentLibrary := 'PCB'; //PcbLibraryFile;
+    s:= 'Location.X='+IntToStr(MilsToCoord(x))+'|Location.Y='
+        +IntToStr(MilsToCoord(y))+'|designator=TP';
+    //Comp.LoadFromLibrary(s);
+
+    ok := IntegratedLibraryManager.PlaceLibraryComponent(
+        'R100',
+        PcbLibraryFile,
+        s);
+
+    //Pad.net:=NewNet(NetName);
+    //Comp.AddPCBObject(Pad);
+
 
     // Set the reference point of the Component
-    Comp.X         := MmsToCoord(x);
-    Comp.Y         := MmsToCoord(y);
-    Comp.Layer     := eTopLayer;
+    //Comp.X         := MmsToCoord(x);
+    //Comp.Y         := MmsToCoord(y);
+    //Comp.Layer     := eTopLayer;
+    //Board.AddPCBObject(Comp);
+    exit;
 
     // Make the designator text visible;
-    Comp.NameOn         := pinDia<5.0;
     Comp.Name.Text      := Designator;
     Comp.Name.Size      := MmsToCoord(1.0);
     Comp.Name.Rotation  := 270;
     Comp.Name.XLocation := MmsToCoord(x - 0.4);
     Comp.Name.YLocation := MmsToCoord(y - HoleDiameter-AnularRing);
+    Comp.NameOn         := pinDia<5.0;
 
     // Make the comment text visible;
     Comp.CommentOn         := pinDia<5.0;
@@ -691,6 +711,11 @@ end;
 // Main procedure to run.
 procedure Run;
 var Dialog: TOpenDialog; InputFile: TextFile;  s:string;
+    CurrentLib        : IPCB_Library;
+    FootprintIterator : IPCB_LibraryIterator;
+    Footprint         : IPCB_LibComponent;
+    Document          : IServerDocument;
+    Comp              : IPCB_Component;
 begin
     s:='OK';
     Dialog:=TOpenDialog.Create(nil);
@@ -710,7 +735,32 @@ begin
         Board := PCBServer.GetCurrentPCBBoard;
         If Board = Nil then exit;
         //PCBServer.PreProcess;
+        Document := Client.OpenDocument('PCBLIB',PcbLibraryFile);
+        CurrentLib := PCBServer.GetPCBLibraryByPath(Document.FileName);
+        If CurrentLib = Nil Then Exit;
+        FootprintIterator := CurrentLib.LibraryIterator_Create;
+        FootprintIterator.SetState_FilterAll;
+        try
+           Footprint := FootprintIterator.FirstPCBObject;
+           while Footprint <> nil do begin
+              if Footprint.Name = 'R100' then begin
+                 R100 := Footprint;
+              end else if Footprint.name='R75' then begin
+                 R75 := Footprint;
+              end;
+              Footprint := FootprintIterator.NextPCBObject;
+           end;
+        finally
+            CurrentLib.LibraryIterator_Destroy(FootprintIterator);
+        end;
 
+        CurrentLib := PcbServer.GetCurrentPCBLibrary;
+        //CurrentLib.SetBoardToComponentByName(
+        Board.AddPCBObject(R100);
+        Board.AddPCBObject(R75);
+        //Board.Component.x := MmsToCoord(20.0);
+        //Board.Component.y := MmsToCoord(20.0);
+        Board.MoveToXY(MmsToCoord(20.0), MmsToCoord(20.0));
         AssignFile(InputFile, Dialog.Filename);
         if AnsiRightStr(Dialog.Filename,3)='gbr' then begin
             CalculateOffset(InputFile);
