@@ -249,7 +249,7 @@ begin
     Dialog:=TOpenDialog.Create(nil);
     Dialog.Filename:=DefaultFileName;
     Dialog.Title:='Select mtt file';
-    Dialog.Filter:='Macaos files (*.mtt)|*.mtt';
+    Dialog.Filter:='Macaos files (*.mtt)|*.mtt'
     if (DefaultFileName<>'') or Dialog.Execute then begin
         AssignFile(InputFile, Dialog.Filename);
         // Check if PCB document exists
