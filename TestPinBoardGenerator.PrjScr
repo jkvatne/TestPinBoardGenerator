@@ -100,13 +100,7 @@ GenerateClassCluster=0
 DocumentUniqueId=
 
 [Generic_ScriptingSystem]
-StartProcName=CreateTestjigSchema.pas>Run
-
-[Generic_ScriptingSystemBreakpoints]
-ModuleName1=C:\Doc\TestJig\TestPinBoardGenerator\CreateTestjigSchema.pas
-Line1=156
-Condition1=
-Enabled1=True
+StartProcName=CreateTestjig.pas>Run
 
 [OutputGroup1]
 Name=Netlist Outputs
