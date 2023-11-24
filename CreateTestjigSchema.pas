@@ -8,8 +8,6 @@
 // Constants for configuration of generator
 // Change them as required
 const
-    // Library path must be set to the library containing
-    LibraryFile = 'C:\doc\altiumlib\Mechanical.SchLib';
     // To avoid entering the file name, set DefaultFileName til the path/name of your gerber file.
     DefaultFileName = '';
     // Library component names
@@ -21,6 +19,7 @@ var
     Schema    : ISCH_doc;
     WorkSpace : IWorkSpace;
     tpno      : integer;
+    LibPath   : string;
 
 procedure PlaceConnectorNet(xpos:integer; ypos:integer; name:string);
 var SchWire:ISch_Wire; SchNetlabel : ISch_Netlabel;
@@ -38,7 +37,7 @@ begin
     Schema.RegisterSchObjectInContainer(SchNetlabel);
 end;
 
-procedure PlaceSchTestPin(xpos, ypos: double; Designator: string; CompName: string; NetName: string);
+function PlaceSchTestPin(xpos, ypos: double; Designator: string; CompName: string; NetName: string):boolean;
 var SchNetlabel : ISch_Netlabel;  ok : boolen; s:string;  SchWire:ISch_Wire;
 begin
     s := 'Orientation=0';
@@ -46,7 +45,12 @@ begin
     s := s + '|Location.Y='+IntToStr(MilsToCoord(ypos));
     s := s + '|designator='+Designator;
     tpno:=tpno+1;
-    IntegratedLibraryManager.PlaceLibraryComponent(CompName, LibraryFile, s);
+    If IntegratedLibraryManager = Nil Then ShowError('No library manager');
+    if not IntegratedLibraryManager.PlaceLibraryComponent(CompName, LibPath, s) then begin
+        ShowError('Library not found');
+        result:=false;
+        exit;
+    end;
 
     SchNetlabel := SchServer.SchObjectFactory(eNetlabel,eCreate_GlobalCopy);
     SchNetlabel.Location    := Point(MilsToCoord(xpos+300), MilsToCoord(ypos));
@@ -61,7 +65,7 @@ begin
     SchWire.Vertex[2] := Point(MilsToCoord(xpos+800), MilsToCoord(ypos));
     Schema.RegisterSchObjectInContainer(SchWire);
 
-    PlaceConnectorNet(12200, 10200-tpno*100, NetName);
+    PlaceConnectorNet(12200, 10500-tpno*100, NetName);
 
 end;
 
@@ -73,22 +77,22 @@ begin
         +IntToStr(MilsToCoord(ypos))+'|designator=X1';
     IntegratedLibraryManager.PlaceLibraryComponent(
         ConnectorName,
-        LibraryFile,
+        LibPath,
         s);
 end;
 
 // Create a schematic with all test pins, with correct net names.
 procedure CreateTestjigSch(InputFile: TextFile);
-var name, line, NetName, HoleDia, PinType, Designator: string; xpos, ypos: integer; i, j:integer;
+var name, line, NetName, HoleDia, PinType, Designator: string; xpos, ypos, distno: integer; i, j:integer;
 begin
     tpno:=1;
+    DistNo := 1;
     // Initialize the robots in Schematic editor.
     //SchServer.ProcessControl.PreProcess(Schema, '');
-    //PlaceConnector(13000, 10000);
-    xpos:=800; ypos:=800;
+    PlaceConnector(13000, 10300);
+    xpos:=800; ypos:=10500;
     name:='-';
     Reset(InputFile);
-
     while not EOF(InputFile) do begin
         Readln(InputFile, line);
         if copy(line,1,6)='PinItm' then begin
@@ -103,11 +107,9 @@ begin
             // X posision
             line := copy(line, i+1, 9999);
             i := pos('|',line);
-            //xpos := strtoint(copy(line, 1, i-1));
             // Y posision
             line := copy(line, i+1, 9999);
             i := pos('|',line);
-            //ypos := strtoint(copy(line, 1, i-1));
             // Hole diameter
             line := copy(line, i+1, 9999);
             i := pos('|',line);
@@ -126,12 +128,18 @@ begin
                 PlaceSchTestPin(xpos, ypos, Designator, 'R75'+PinType, NetName);
             end else if HoleDia=1700000 then begin
                 PlaceSchTestPin(xpos, ypos, Designator, 'R100'+PinType, NetName);
+            end else if (HoleDia=5000000) and (NetName='Distance') then begin
+                PlaceSchTestPin(xpos, ypos, 'DIST'+inttostr(DistNo), 'GUIDE', 'No Net');
+                DistNo:=DistNo+1;
+            //end else if HoleDia=5000000 and NetName='Guide' then begin
+                //PlaceSchTestPin(xpos, ypos, 'GUIDE'+inttostr(DistNo), 'GUIDE', 'No Net');
+                //DistNo:=DistNo+1;
             end;
-            if HoleDia<5000000 then begin
-               ypos := ypos+300;
-               if ypos>10000 then begin
+            if HoleDia<=5000000 then begin
+               ypos := ypos-400;
+               if ypos<800 then begin
                   xpos:=xpos+1200;
-                  ypos:=800;
+                  ypos:=10500;
                end;
             end;
         end;
@@ -142,23 +150,51 @@ end;
 
 // Main procedure to run.
 procedure Run;
-var Dialog: TOpenDialog; InputFile: TextFile;
+var Dialog: TOpenDialog; InputFile: TextFile; IntMan: IIntegratedLibraryManager; i:integer;
 begin
+    LibPath:='';
+    IntMan := IntegratedLibraryManager;
+    if IntMan = nil then begin
+       ShowError('No lib manager');
+       exit;
+    end;
+    for i:=0 to IntMan.AvailableLibraryCount-1 do begin
+        if pos('TestPins', IntMan.AvailableLibraryPath(i))>0 then begin
+           LibPath:=IntMan.AvailableLibraryPath(i);
+        end;
+    end;
+    if LibPath='' then begin
+        ShowError('Could not find TestPinLib.IntLib. Please install it (doubleclick it)');
+        exit;
+    end;
     Dialog:=TOpenDialog.Create(nil);
     Dialog.Filename:=DefaultFileName;
+    Dialog.Title:='Select mtt file for schematic generation';
+    Dialog.Filter:='Macaos files (*.mtt)|*.mtt' ;
     if (DefaultFileName<>'') or Dialog.Execute then begin
-        // Create a new pcb document
+        // Create a new schematic
         WorkSpace := GetWorkSpace;
-        If WorkSpace = Nil Then Exit;
+        if WorkSpace = nil then begin
+            ShowError('Could not find workspace');
+            exit;
+        end;
         Client.StartServer('SCH');
-        If SchServer = Nil Then Exit;
+        if SchServer = nil then begin
+            ShowError('Could not start schematic server');
+            exit;
+        end;
         CreateNewDocumentFromDocumentKind('SCH');
         Schema := SchServer.GetCurrentSchDocument;
+        if Schema = nil then begin
+            ShowError('Could not creat new schema');
+            exit;
+        end;
         AssignFile(InputFile, Dialog.Filename);
         try
             SchServer.ProcessControl.PreProcess(Schema, '');
             CreateTestjigSch(InputFile);
         finally
+            CloseFile(InputFile);
             SchServer.ProcessControl.PostProcess(Schema, '');
         end;
     end;
